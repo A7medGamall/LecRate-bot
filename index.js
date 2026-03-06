@@ -478,17 +478,19 @@ bot.action(/view_comments:([a-f0-9\-]+)/, async (ctx) => {
 // Enter Rate Scene
 bot.action(/rate_prompt:([a-f0-9\-]+)/, async (ctx) => {
     try {
+        // Instantly acknowledge the button press so Telegram stops the "loading" clock icon
+        await ctx.answerCbQuery();
+        
         const sourceId = ctx.match[1];
         
         // Fetch source title from DB instead of passing in callback_data to save bytes
         const { data: source } = await supabase.from('sources').select('title').eq('id', sourceId).single();
-        if (!source) return ctx.answerCbQuery("المصدر غير موجود", { show_alert: true });
+        if (!source) return ctx.reply("المصدر غير موجود");
 
-        ctx.answerCbQuery();
         ctx.scene.enter('RATE_SCENE', { sourceId: sourceId, sourceName: source.title });
     } catch (err) {
         console.error(err);
-        ctx.answerCbQuery("❌ حدث خطأ", { show_alert: true });
+        ctx.reply("❌ حدث خطأ");
     }
 });
 
