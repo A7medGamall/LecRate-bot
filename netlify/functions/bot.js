@@ -1,4 +1,4 @@
-import bot from '../../index.js';
+import { bot } from '../../index.js';
 
 export const handler = async (event) => {
     try {

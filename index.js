@@ -504,7 +504,7 @@ bot.action(/add_source:([a-f0-9\-]+)/, (ctx) => {
     ctx.scene.enter('ADD_SOURCE_SCENE', { lectureId: ctx.match[1] });
 });
 
-export default bot;
+export { bot };
 
 // Launch Bot (Only in local development, Netlify uses the webhook handler)
 if (process.env.NODE_ENV !== 'production') {
