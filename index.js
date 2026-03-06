@@ -202,8 +202,8 @@ addSourceScene.action(/rate_new_score:(.+)/, async (ctx) => {
 
 const stage = new Scenes.Stage([addUrlScene, addSourceScene, rateScene]);
 
-// Set up session and scenes middleware
-bot.use((new LocalSession({ database: 'session_db.json' })).middleware());
+// Set up session and scenes middleware (Using /tmp for Netlify Serverless compatibility)
+bot.use((new LocalSession({ database: '/tmp/session_db.json' })).middleware());
 bot.use(stage.middleware());
 
 // Debug all callbacks
@@ -504,10 +504,14 @@ bot.action(/add_source:([a-f0-9\-]+)/, (ctx) => {
     ctx.scene.enter('ADD_SOURCE_SCENE', { lectureId: ctx.match[1] });
 });
 
-// Launch Bot
-bot.launch(() => {
-    console.log('🤖 LecRate Bot is running with Advanced Scenes & Comments support...');
-});
+export default bot;
+
+// Launch Bot (Only in local development, Netlify uses the webhook handler)
+if (process.env.NODE_ENV !== 'production') {
+    bot.launch(() => {
+        console.log('🤖 LecRate Bot is running in polling mode...');
+    });
+}
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
