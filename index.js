@@ -142,6 +142,16 @@ addSourceScene.on('text', async (ctx) => {
         return ctx.reply(`لقد قمت بإضافة "${text}".\n\n⭐ بما أنك أضفت هذا المصدر، نرجو منك تقييمه من 1 لـ 10:\n\nأو أرسل /cancel للإلغاء`, Markup.inlineKeyboard(getRatingKeyboard('rate_new_score')));
     }
     
+    if (ctx.scene.state.step === 'duration') {
+        const duration = parseInt(text);
+        if (isNaN(duration) || duration < 0) {
+            return ctx.reply("⚠️ يرجى إدخال رقم صحيح يمثل مدة المصدر بالدقائق (مثال: 45).\n\nأو أرسل /cancel للإلغاء");
+        }
+        ctx.scene.state.duration = duration;
+        ctx.scene.state.step = 'comment';
+        return ctx.reply("✍️ هل تود إضافة تعليق أو رأي عن المصدر؟\n\n(أرسل التعليق الآن، أو أرسل 'تخطي' لتجاهل هذه الخطوة)\n\nأو أرسل /cancel للإلغاء");
+    }
+
     if (ctx.scene.state.step === 'comment') {
         ctx.scene.state.comment = text === 'تخطي' ? null : text;
         ctx.scene.state.step = 'url';
@@ -166,11 +176,13 @@ addSourceScene.on('text', async (ctx) => {
         
         try {
             // 1. Create Source
+            const durationMinutes = ctx.scene.state.duration || 0;
+            
             const { data: sourceData, error: sourceError } = await supabase.from('sources').insert({
                 lecture_id: lectureId,
                 title: sourceName,
                 url: finalUrl,
-                duration_minutes: 0 // Default value
+                duration_minutes: durationMinutes
             }).select().single();
             
             if (sourceError) throw sourceError;
@@ -196,8 +208,8 @@ addSourceScene.on('text', async (ctx) => {
 // Action handler for the rating inside ADD_SOURCE_SCENE
 addSourceScene.action(/rate_new_score:(.+)/, async (ctx) => {
     ctx.scene.state.score = parseInt(ctx.match[1]);
-    ctx.scene.state.step = 'comment';
-    await ctx.editMessageText(`✅ التقييم المبدئي: ${ctx.scene.state.score}/10\n\n✍️ هل تود إضافة تعليق أو رأي عن المصدر؟\n\n(أرسل التعليق الآن، أو أرسل 'تخطي' لتجاهل هذه الخطوة)`);
+    ctx.scene.state.step = 'duration';
+    await ctx.editMessageText(`✅ التقييم المبدئي: ${ctx.scene.state.score}/10\n\n⏱️ كم مدة هذا المصدر بالدقائق تقريباً؟ (أرسل رقماً فقط، مثلاً: 45)`);
 });
 
 const stage = new Scenes.Stage([addUrlScene, addSourceScene, rateScene]);
