@@ -1,0 +1,6 @@
+node_modules/
+.env
+.env.*
+session_db.json
+error.log
+test-db.js
