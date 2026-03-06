@@ -521,7 +521,7 @@ bot.action(/add_source:([a-f0-9\-]+)/, (ctx) => {
 export { bot };
 
 // Launch Bot (Only in local development, Netlify uses the webhook handler)
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.LOCAL_DEV === 'true') {
     bot.launch(() => {
         console.log('🤖 LecRate Bot is running in polling mode...');
     });
