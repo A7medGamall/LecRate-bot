@@ -33,3 +33,4 @@
 ## ⏭️ إيه اللي جاي؟
 
 في المرة الجاية لما نفتح الشات، قولي **"افتح ملف `bot_progress_summary.md` عشان تفتكر إحنا وقفنا فين"** وهبدأ معاك من النقطة دي على طول من غير أي لغبطة!
+\n## Session Update (Fixes & Features) - 2026-03-07T20:13:05.257Z\n- Fixed inline button responsiveness (added await answerCbQuery).\n- Restored duration prompt correctly when adding new sources.\n- Added inline Skip buttons for optional steps (Comment, URL).\n- Implemented Smart URL prompting (asks for URL during rating only if source lacks one).\n- Created SQL commands to rectify UTC vs GMT+2 (Cairo Time) drift in Supabase using Generated Columns.\n
