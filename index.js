@@ -410,8 +410,10 @@ bot.action(/lecture:(.+)/, async (ctx) => {
                     : "غير مقيم";
 
                 const linkText = s.url ? `[اضغط هنا للمشاهدة](${s.url})` : `لا يوجد رابط`;
+                const durationText = s.duration_minutes ? `⏱️ المدة: ${s.duration_minutes} دقيقة\n` : '';
                 
                 messageText += `*${index + 1}. ${s.title}*\n`;
+                if (durationText) messageText += durationText;
                 messageText += `⭐ التقييم: ${avgScore}/10 (${ratingsCount} تقييمات)\n`;
                 messageText += `🔗 الرابط: ${linkText}\n`;
 
