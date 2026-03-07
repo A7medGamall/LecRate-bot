@@ -23,7 +23,7 @@ The bot is deployed as a Serverless Function on Netlify to run 100% free with no
 - **Build Command:** `npm install`
 - **Publish Directory:** `(empty)`
 - **Functions Directory:** `netlify/functions`
-- **Webhook URL:** `https://superlative-conkies-55e617.netlify.app/.netlify/functions/bot`
+- **Webhook URL:** `https://lecrate-bot.netlify.app/.netlify/functions/bot`
 
 ### Environment Variables (.env)
 

@@ -90,21 +90,74 @@ rateScene.command('cancel', (ctx) => {
     return ctx.scene.leave();
 });
 rateScene.action(/rate_score:(.+)/, async (ctx) => {
+    await ctx.answerCbQuery();
     ctx.scene.state.score = parseInt(ctx.match[1]);
-    await ctx.editMessageText(`✅ التقييم: ${ctx.scene.state.score}/10\n\n✍️ هل تود إضافة تعليق أو رأي يوضح تجربتك مع هذا المصدر ليفيد باقي الطلبة؟\n\n(أرسل التعليق الآن، أو أرسل 'تخطي' إذا كنت لا ترغب في كتابة تعليق)\nأو /cancel للإلغاء`);
+    await ctx.editMessageText(
+        `✅ التقييم: ${ctx.scene.state.score}/10\n\n✍️ هل تود إضافة تعليق أو رأي يوضح تجربتك مع هذا المصدر ليفيد باقي الطلبة؟\n\n(أرسل التعليق الآن، أو اضغط تخطي)\nأو /cancel للإلغاء`,
+        Markup.inlineKeyboard([
+            [Markup.button.callback('⏭️ تخطي التعليق', 'skip_comment')]
+        ])
+    );
 });
 rateScene.on('text', async (ctx) => {
     const text = ctx.message.text;
-    const score = ctx.scene.state.score;
-    const sourceId = ctx.scene.state.sourceId;
-    const userId = ctx.from.id.toString();
     
+    // If we're currently asking for the URL
+    if (ctx.scene.state.step === 'url_prompt') {
+        if (!text.startsWith('http')) {
+            return ctx.reply(
+                "⚠️ الرابط غير صحيح. يجب أن يبدأ بـ http أو https. حاول مجدداً، أو اضغط تخطي، أو /cancel للإلغاء",
+                Markup.inlineKeyboard([[Markup.button.callback('⏭️ تخطي الرابط', 'skip_rate_url')]])
+            );
+        }
+        await finalizeRating(ctx, text);
+        return;
+    }
+
+    await handleRateComment(ctx, text);
+});
+
+rateScene.action('skip_comment', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleRateComment(ctx, null);
+});
+
+rateScene.action('skip_rate_url', async (ctx) => {
+    await ctx.answerCbQuery();
+    await finalizeRating(ctx, null);
+});
+
+async function handleRateComment(ctx, commentText) {
+    const score = ctx.scene.state.score;
     // Safety check if they didn't click a score yet
     if (!score) return ctx.reply("الرجاء اختيار التقييم أولاً من الأزرار أعلاه.");
 
-    const comment = text === 'تخطي' ? null : text;
+    ctx.scene.state.comment = commentText;
 
+    // Check if source lacks URL
+    if (!ctx.scene.state.sourceUrl) {
+        ctx.scene.state.step = 'url_prompt';
+        return ctx.reply(
+            "💡 ملاحظة: هذا المصدر لا يحتوي على رابط بعد.\n\nإذا كان لديك الرابط، يرجى إرساله الآن كمساهمة منك مفيدة لباقي الطلاب، أو اضغط تخطي.",
+            Markup.inlineKeyboard([[Markup.button.callback('⏭️ تخطي الرابط', 'skip_rate_url')]])
+        );
+    } else {
+        await finalizeRating(ctx, null);
+    }
+}
+
+async function finalizeRating(ctx, providedUrl) {
+    const score = ctx.scene.state.score;
+    const comment = ctx.scene.state.comment;
+    const sourceId = ctx.scene.state.sourceId;
+    const userId = ctx.from.id.toString();
+    
     try {
+        if (providedUrl) {
+            const { error: urlError } = await supabase.from('sources').update({ url: providedUrl }).eq('id', sourceId);
+            if (urlError) console.error("Error updating URL:", urlError);
+        }
+
         const { error } = await supabase.from('ratings').insert({
             source_id: sourceId,
             score: score,
@@ -117,10 +170,10 @@ rateScene.on('text', async (ctx) => {
         await ctx.reply(`✅ تم تسجيل تقييمك بنجاح! شكراً لمساهمتك.`);
     } catch (err) {
         console.error(err);
-        ctx.reply("❌ حدث خطأ أثناء حفظ التقييم.");
+        await ctx.reply("❌ حدث خطأ أثناء حفظ التقييم.");
     }
     return ctx.scene.leave();
-});
+}
 
 
 // 3. Scene for adding a completely new source (Needs Name, Rating, Comment, URL)
@@ -149,67 +202,97 @@ addSourceScene.on('text', async (ctx) => {
         }
         ctx.scene.state.duration = duration;
         ctx.scene.state.step = 'comment';
-        return ctx.reply("✍️ هل تود إضافة تعليق أو رأي عن المصدر؟\n\n(أرسل التعليق الآن، أو أرسل 'تخطي' لتجاهل هذه الخطوة)\n\nأو أرسل /cancel للإلغاء");
+        return ctx.reply(
+            "✍️ هل تود إضافة تعليق أو رأي عن المصدر؟\n\n(أرسل التعليق الآن، أو اضغط تخطي)\n\nأو أرسل /cancel للإلغاء",
+            Markup.inlineKeyboard([
+                [Markup.button.callback('⏭️ تخطي التعليق', 'skip_comment')]
+            ])
+        );
     }
 
     if (ctx.scene.state.step === 'comment') {
-        ctx.scene.state.comment = text === 'تخطي' ? null : text;
+        ctx.scene.state.comment = text;
         ctx.scene.state.step = 'url';
-        return ctx.reply("🔗 رائع! الخطوة الأخيرة جزء مهم: أرسل رابط المصدر.\n\n(إذا كان المصدر ليس له رابط أو هو عبارة عن مكان على أرض الواقع، أرسل كلمة 'تخطي')\n\nأو أرسل /cancel للإلغاء");
+        return ctx.reply(
+            "🔗 رائع! الخطوة الأخيرة جزء مهم: أرسل رابط المصدر.\n\n(أرسل الرابط، أو اضغط تخطي)\n\nأو أرسل /cancel للإلغاء",
+            Markup.inlineKeyboard([
+                [Markup.button.callback('⏭️ تخطي الرابط', 'skip_url')]
+            ])
+        );
     }
 
     if (ctx.scene.state.step === 'url') {
-        let finalUrl = null;
-
-        if (text !== 'تخطي') {
-            if (!text.startsWith('http')) {
-                return ctx.reply("⚠️ الرابط غير صحيح. يجب أن يبدأ بـ http أو https. حاول مجدداً، أو أرسل 'تخطي' إذا لم يكن هناك رابط، أو /cancel للإلغاء");
-            }
-            finalUrl = text;
+        if (!text.startsWith('http')) {
+            return ctx.reply(
+                "⚠️ الرابط غير صحيح. يجب أن يبدأ بـ http أو https. حاول مجدداً، أو اضغط تخطي، أو /cancel للإلغاء",
+                Markup.inlineKeyboard([[Markup.button.callback('⏭️ تخطي الرابط', 'skip_url')]])
+            );
         }
         
-        const lectureId = ctx.scene.state.lectureId;
-        const sourceName = ctx.scene.state.sourceName;
-        const score = ctx.scene.state.score;
-        const comment = ctx.scene.state.comment;
-        const userId = ctx.from.id.toString();
-        
-        try {
-            // 1. Create Source
-            const durationMinutes = ctx.scene.state.duration || 0;
-            
-            const { data: sourceData, error: sourceError } = await supabase.from('sources').insert({
-                lecture_id: lectureId,
-                title: sourceName,
-                url: finalUrl,
-                duration_minutes: durationMinutes
-            }).select().single();
-            
-            if (sourceError) throw sourceError;
-            
-            // 2. Create Rating for the new source
-            const { error: ratingError } = await supabase.from('ratings').insert({
-                source_id: sourceData.id,
-                score: score,
-                comment: comment,
-                user_identifier: userId 
-            });
-
-            if (ratingError) throw ratingError;
-
-            ctx.reply(`✅ تم إضافة المصدر "${sourceName}" وتقييمك له بنجاح! شكراً لمساهمتك العظيمة.`);
-        } catch (err) {
-            console.error(err);
-            ctx.reply("❌ حدث خطأ أثناء حفظ المصدر أو التقييم.");
-        }
-        return ctx.scene.leave();
+        await handleAddSourceSubmit(ctx, text);
     }
 });
+async function handleAddSourceSubmit(ctx, finalUrl) {
+    const lectureId = ctx.scene.state.lectureId;
+    const sourceName = ctx.scene.state.sourceName;
+    const score = ctx.scene.state.score;
+    const comment = ctx.scene.state.comment;
+    const userId = ctx.from.id.toString();
+    
+    try {
+        // 1. Create Source
+        const durationMinutes = ctx.scene.state.duration || 0;
+        
+        const { data: sourceData, error: sourceError } = await supabase.from('sources').insert({
+            lecture_id: lectureId,
+            title: sourceName,
+            url: finalUrl,
+            duration_minutes: durationMinutes
+        }).select().single();
+        
+        if (sourceError) throw sourceError;
+        
+        // 2. Create Rating for the new source
+        const { error: ratingError } = await supabase.from('ratings').insert({
+            source_id: sourceData.id,
+            score: score,
+            comment: comment,
+            user_identifier: userId 
+        });
+
+        if (ratingError) throw ratingError;
+
+        await ctx.reply(`✅ تم إضافة المصدر "${sourceName}" وتقييمك له بنجاح! شكراً لمساهمتك العظيمة.`);
+    } catch (err) {
+        console.error(err);
+        await ctx.reply("❌ حدث خطأ أثناء حفظ المصدر أو التقييم.");
+    }
+    return ctx.scene.leave();
+}
 // Action handler for the rating inside ADD_SOURCE_SCENE
 addSourceScene.action(/rate_new_score:(.+)/, async (ctx) => {
+    await ctx.answerCbQuery();
     ctx.scene.state.score = parseInt(ctx.match[1]);
     ctx.scene.state.step = 'duration';
     await ctx.editMessageText(`✅ التقييم المبدئي: ${ctx.scene.state.score}/10\n\n⏱️ كم مدة هذا المصدر بالدقائق تقريباً؟ (أرسل رقماً فقط، مثلاً: 45)`);
+});
+
+// Action handlers for skips inside ADD_SOURCE_SCENE
+addSourceScene.action('skip_comment', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.scene.state.comment = null;
+    ctx.scene.state.step = 'url';
+    await ctx.editMessageText(
+        "🔗 رائع! الخطوة الأخيرة جزء مهم: أرسل رابط المصدر.\n\n(أرسل الرابط، أو اضغط تخطي)\n\nأو أرسل /cancel للإلغاء",
+        Markup.inlineKeyboard([
+            [Markup.button.callback('⏭️ تخطي الرابط', 'skip_url')]
+        ])
+    );
+});
+
+addSourceScene.action('skip_url', async (ctx) => {
+    await ctx.answerCbQuery();
+    await handleAddSourceSubmit(ctx, null);
 });
 
 const stage = new Scenes.Stage([addUrlScene, addSourceScene, rateScene]);
@@ -248,6 +331,7 @@ bot.start(async (ctx) => {
 // Redirect both choices to Batch Selection
 bot.action(/flow_(.+)/, async (ctx) => {
     try {
+        await ctx.answerCbQuery();
         const { data: batches, error } = await supabase.from('batches').select('*').order('name');
         
         if (error) throw error;
@@ -262,7 +346,6 @@ bot.action(/flow_(.+)/, async (ctx) => {
             "اختر الدفعة الخاصة بك:",
             Markup.inlineKeyboard(buttons)
         );
-        await ctx.answerCbQuery();
     } catch (err) {
         console.error(err);
         ctx.answerCbQuery("❌ حدث خطأ أثناء جلب الدفعات.", { show_alert: true });
@@ -276,6 +359,7 @@ bot.action(/flow_(.+)/, async (ctx) => {
 // Handle Batch Selection
 bot.action(/batch:(.+)/, async (ctx) => {
     try {
+        await ctx.answerCbQuery();
         const batchId = ctx.match[1];
         
         const { data: modules, error } = await supabase
@@ -297,7 +381,6 @@ bot.action(/batch:(.+)/, async (ctx) => {
             "اختر المادة:",
             Markup.inlineKeyboard(buttons)
         );
-        await ctx.answerCbQuery();
     } catch (err) {
         console.error(err);
         ctx.answerCbQuery("❌ حدث خطأ", { show_alert: true });
@@ -313,7 +396,6 @@ bot.action('start_menu', async (ctx) => {
                 [Markup.button.callback('أريد البحث عن تقييمات لمحاضرة', 'flow_browse')]
             ])
         );
-        await ctx.answerCbQuery();
     } catch {
         ctx.answerCbQuery("❌ خطأ", { show_alert: true });
     }
@@ -321,6 +403,7 @@ bot.action('start_menu', async (ctx) => {
 
 bot.action(/module:(.+)/, async (ctx) => {
     try {
+        await ctx.answerCbQuery();
         const moduleId = ctx.match[1];
         await ctx.editMessageText(
             "اختر نوع المحتوى:",
@@ -332,7 +415,6 @@ bot.action(/module:(.+)/, async (ctx) => {
                 [Markup.button.callback('🔙 رجوع للمواد', `flow_browse`)] 
             ])
         );
-        await ctx.answerCbQuery();
     } catch (err) {
         console.error(err);
         ctx.answerCbQuery("❌ حدث خطأ", { show_alert: true });
@@ -341,6 +423,7 @@ bot.action(/module:(.+)/, async (ctx) => {
 
 bot.action(/content_type:(.+):(.+)/, async (ctx) => {
     try {
+        await ctx.answerCbQuery();
         const moduleId = ctx.match[1];
         const type = ctx.match[2]; 
         
@@ -371,7 +454,6 @@ bot.action(/content_type:(.+):(.+)/, async (ctx) => {
             `اختر الـ ${type === 'lecture' ? 'محاضرة' : 'سكشن'}:`,
             Markup.inlineKeyboard(buttons)
         );
-        await ctx.answerCbQuery();
     } catch (err) {
         console.error(err);
         ctx.answerCbQuery("❌ حدث خطأ", { show_alert: true });
@@ -381,6 +463,7 @@ bot.action(/content_type:(.+):(.+)/, async (ctx) => {
 // Show Sources for a Lecture
 bot.action(/lecture:(.+)/, async (ctx) => {
     try {
+        await ctx.answerCbQuery();
         const lectureId = ctx.match[1];
         
         const { data: lecture } = await supabase.from('lectures').select('*').eq('id', lectureId).single();
@@ -441,7 +524,6 @@ bot.action(/lecture:(.+)/, async (ctx) => {
             disable_web_page_preview: true,
             ...Markup.inlineKeyboard(buttons)
         });
-        await ctx.answerCbQuery();
     } catch (err) {
         console.error(err);
         ctx.answerCbQuery("❌ حدث خطأ", { show_alert: true });
@@ -451,6 +533,7 @@ bot.action(/lecture:(.+)/, async (ctx) => {
 // View Comments Action
 bot.action(/view_comments:([a-f0-9\-]+)/, async (ctx) => {
     try {
+        await ctx.answerCbQuery();
         const sourceId = ctx.match[1];
 
         const { data: source } = await supabase.from('sources').select('title').eq('id', sourceId).single();
@@ -481,7 +564,6 @@ bot.action(/view_comments:([a-f0-9\-]+)/, async (ctx) => {
         // We send this as a new message so it doesn't overwrite the sources list, 
         // making it easy to read while keeping the sources list active below it.
         await ctx.reply(messageText, { parse_mode: 'Markdown' });
-        await ctx.answerCbQuery();
     } catch (err) {
         console.error(err);
         ctx.answerCbQuery("❌ حدث خطأ أثناء جلب التعليقات", { show_alert: true });
@@ -497,11 +579,11 @@ bot.action(/rate_prompt:([a-f0-9\-]+)/, async (ctx) => {
         
         const sourceId = ctx.match[1];
         
-        // Fetch source title from DB instead of passing in callback_data to save bytes
-        const { data: source } = await supabase.from('sources').select('title').eq('id', sourceId).single();
+        // Fetch source title and url from DB instead of passing in callback_data to save bytes
+        const { data: source } = await supabase.from('sources').select('title, url').eq('id', sourceId).single();
         if (!source) return ctx.reply("المصدر غير موجود");
 
-        ctx.scene.enter('RATE_SCENE', { sourceId: sourceId, sourceName: source.title });
+        await ctx.scene.enter('RATE_SCENE', { sourceId: sourceId, sourceName: source.title, sourceUrl: source.url });
     } catch (err) {
         console.error(err);
         ctx.reply("❌ حدث خطأ");
@@ -509,15 +591,15 @@ bot.action(/rate_prompt:([a-f0-9\-]+)/, async (ctx) => {
 });
 
 // Enter Add URL Scene
-bot.action(/add_url:([a-f0-9\-]+)/, (ctx) => {
-    ctx.answerCbQuery();
-    ctx.scene.enter('ADD_URL_SCENE', { sourceId: ctx.match[1] });
+bot.action(/add_url:([a-f0-9\-]+)/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('ADD_URL_SCENE', { sourceId: ctx.match[1] });
 });
 
 // Enter Add Source Scene
-bot.action(/add_source:([a-f0-9\-]+)/, (ctx) => {
-    ctx.answerCbQuery();
-    ctx.scene.enter('ADD_SOURCE_SCENE', { lectureId: ctx.match[1] });
+bot.action(/add_source:([a-f0-9\-]+)/, async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('ADD_SOURCE_SCENE', { lectureId: ctx.match[1] });
 });
 
 export { bot };
