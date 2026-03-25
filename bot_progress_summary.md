@@ -34,4 +34,14 @@
 ## ⏭️ إيه اللي جاي؟
 
 في المرة الجاية لما نفتح الشات، قولي **"افتح ملف `bot_progress_summary.md` عشان تفتكر إحنا وقفنا فين"** وهبدأ معاك من النقطة دي على طول من غير أي لغبطة!
-\n## Session Update (Fixes & Features) - 2026-03-07T20:13:05.257Z\n- Fixed inline button responsiveness (added await answerCbQuery).\n- Restored duration prompt correctly when adding new sources.\n- Added inline Skip buttons for optional steps (Comment, URL).\n- Implemented Smart URL prompting (asks for URL during rating only if source lacks one).\n- Created SQL commands to rectify UTC vs GMT+2 (Cairo Time) drift in Supabase using Generated Columns.\n
+
+## Session Update (Fixes & Features) - 2026-03-07T20:13:05.257Z
+- Fixed inline button responsiveness (added await answerCbQuery).
+- Restored duration prompt correctly when adding new sources.
+- Added inline Skip buttons for optional steps (Comment, URL).
+- Implemented Smart URL prompting (asks for URL during rating only if source lacks one).
+- Created SQL commands to rectify UTC vs GMT+2 (Cairo Time) drift in Supabase using Generated Columns.
+
+## Session Update (Ophthalmology Syllabus & Sorting) - 2026-03-26
+- **Sorting Logic**: Implemented algorithm in Bot to correctly sort sources by **Average Rating** (highest to lowest) to perfectly match the Next.js platform behavior. 
+- **Ophthalmology DB Import**: Correctly mapped the multi-part Ophthalmology lectures from an image syllabus into a standardized array of 20 un-split `lecture` properties and pushed it cleanly to the `Ophthalmology` module in `43`.
