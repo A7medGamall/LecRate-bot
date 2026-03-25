@@ -473,10 +473,22 @@ bot.action(/lecture:(.+)/, async (ctx) => {
         const { data: sources, error } = await supabase
             .from('sources')
             .select('*, ratings(score, comment, created_at)')
-            .eq('lecture_id', lectureId)
-            .order('created_at', { ascending: true });
+            .eq('lecture_id', lectureId);
             
         if (error) throw error;
+
+        // Sort sources by average rating (highest first)
+        if (sources && sources.length > 0) {
+            sources.sort((a, b) => {
+                const avgA = a.ratings && a.ratings.length > 0
+                    ? a.ratings.reduce((acc, r) => acc + r.score, 0) / a.ratings.length
+                    : 0;
+                const avgB = b.ratings && b.ratings.length > 0
+                    ? b.ratings.reduce((acc, r) => acc + r.score, 0) / b.ratings.length
+                    : 0;
+                return avgB - avgA;
+            });
+        }
 
         let messageText = `📚 *${lecture.type === 'lecture' ? 'محاضرة' : 'سكشن'} ${lecture.number}: ${lecture.title}*\n\n`;
         const buttons = [];
